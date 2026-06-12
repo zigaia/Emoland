@@ -1,0 +1,466 @@
+/* ============================================
+   Emoland v0.1 — 移动端全屏风格
+   ============================================ */
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* 阻止移动端橡皮筋效果 */
+  overscroll-behavior: none;
+  -webkit-overscroll-behavior: none;
+  /* 禁止选中文字 */
+  user-select: none;
+  -webkit-user-select: none;
+  /* 禁止长按菜单 */
+  -webkit-touch-callout: none;
+  /* 背景色：画布加载前的底色 */
+  background: #1a1a2e;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* ============================================
+   主界面动态背景视频
+   ============================================ */
+#dialog-video {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;            /* 和 Canvas 底图一样 cover 填充 */
+  z-index: 0;                   /* 垫在最底层 */
+  opacity: 1;
+  transition: opacity 0.5s;
+}
+
+#dialog-video.hidden {
+  opacity: 0;
+}
+
+/* ============================================
+   全屏 Canvas
+   ============================================ */
+#emoland-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 1;
+  /* 主界面时 Canvas 透明，视频透出；
+     场景模式时绘制底图覆盖视频 */
+}
+
+/* ============================================
+   底部输入栏
+   ============================================ */
+#input-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  /* 为 iPhone 底部横条留安全区 */
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  /* 半透明玻璃效果 */
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+#scene-input {
+  flex: 1;
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+#scene-input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+#scene-input:focus {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+#send-btn {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#send-btn:active {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ============================================
+   加载遮罩
+   ============================================ */
+#loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a2e;
+  transition: opacity 0.6s ease-out;
+}
+
+#loading-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-text {
+  font-size: 28px;
+  font-weight: bold;
+  color: #fff;
+  letter-spacing: 4px;
+}
+
+.loading-dots span {
+  display: inline-block;
+  animation: blink 1.4s infinite both;
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes blink {
+  0%, 100% { opacity: 0.2; }
+  50%      { opacity: 1; }
+}
+
+/* ============================================
+   主界面正中文字（仅 dialog 模式显示）
+   ============================================ */
+#center-text {
+  position: fixed;
+  /* 上边缘距顶部 16% */
+  top: 16%;
+  left: 50%;
+  transform: translate(-50%, 0);
+  z-index: 5;
+  text-align: center;
+  color: #fff;
+  pointer-events: none;
+  transition: opacity 0.5s;
+}
+
+#center-text.hidden {
+  opacity: 0;
+}
+
+.center-line {
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: 4px;
+  margin-bottom: 10px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.center-sub {
+  font-size: 14px;
+  letter-spacing: 3px;
+  opacity: 0.75;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================
+   预设场景快捷按钮（仅 dialog 模式显示）
+   ============================================ */
+#preset-bar {
+  position: fixed;
+  bottom: 68px;                  /* 靠近输入栏 */
+  left: 8px;
+  right: 8px;
+  z-index: 8;
+  display: flex;
+  flex-wrap: nowrap;             /* 单行 */
+  justify-content: center;
+  gap: 6px;
+  opacity: 1;
+  transition: opacity 0.4s, transform 0.4s;
+}
+
+#preset-bar.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+}
+
+.preset-btn {
+  /* 圆角胶囊 */
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 20px;           /* 胶囊形 */
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.preset-btn:active {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: scale(0.95);
+}
+
+/* ============================================
+   静音切换按钮（右上角，始终可见）
+   ============================================ */
+#mute-btn {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+#mute-btn:active {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+/* 喇叭 SVG */
+.mute-svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+/* 喇叭主体 + 声波 + 斜线：统一线稿风格 */
+.speaker-body {
+  fill: rgba(255, 255, 255, 0.15);
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 1.8px;
+  stroke-linejoin: round;
+}
+
+.speaker-wave {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 1.8px;
+  stroke-linecap: round;
+  transition: opacity 0.3s;
+}
+
+.speaker-x {
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 1.8px;
+  stroke-linecap: round;
+  transition: opacity 0.3s;
+}
+
+/* 静音态：显示斜线，隐藏声波 */
+#mute-btn.muted .speaker-wave { opacity: 0; }
+#mute-btn.muted .speaker-x    { opacity: 1; }
+
+/* 非静音态：隐藏斜线，显示声波 */
+#mute-btn:not(.muted) .speaker-wave { opacity: 1; }
+#mute-btn:not(.muted) .speaker-x    { opacity: 0; }
+
+/* ============================================
+   收藏按钮（右上角，喇叭左侧）
+   ============================================ */
+#fav-btn {
+  position: fixed;
+  top: 16px;
+  right: 64px;                  /* 喇叭左侧 8px 间距 */
+  z-index: 20;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  overflow: visible;            /* 光晕溢出可见 */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s, background 0.15s;
+}
+
+#fav-btn.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#fav-btn:active {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+/* 心形 SVG */
+.heart-svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+  position: relative;
+  z-index: 2;
+}
+
+/* 心形路径 — 默认线稿 */
+.heart-path {
+  fill: transparent;
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 2px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: fill 0.3s ease-out, stroke 0.3s ease-out, filter 0.3s ease-out;
+}
+
+/* 已收藏：填充 + 外发光 */
+#fav-btn.favorited .heart-path {
+  fill: rgba(255, 255, 255, 0.6);
+  stroke: rgba(255, 255, 255, 0.7);
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
+}
+
+/* 点击弹跳动效 */
+#fav-btn.popping .heart-svg {
+  animation: heart-pop 0.3s ease-out;
+}
+
+@keyframes heart-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.8); }
+  100% { transform: scale(1); }
+}
+
+/* 光晕扩散圈（ ::after ） */
+#fav-btn::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+
+#fav-btn.ringing::after {
+  animation: glow-ring 0.4s ease-out;
+}
+
+@keyframes glow-ring {
+  0%   { transform: scale(0.6); opacity: 0.6; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+/* ============================================
+   返回主界面按钮（场景模式时显示）
+   ============================================ */
+#back-btn {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 15;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s, background 0.2s;
+}
+
+#back-btn.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#back-btn:active {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+/* ============================================
+   场景名称提示（切换场景时短暂显示）
+   ============================================ */
+#scene-toast {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 8px 20px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 14px;
+  letter-spacing: 2px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+#scene-toast.show {
+  opacity: 1;
+}

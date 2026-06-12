@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Emoland</title>
+  <!-- 像素字体 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 全屏画布 -->
+  <canvas id="emoland-canvas"></canvas>
+
+  <!-- 主界面正中文字（仅 dialog 模式显示） -->
+  <div id="center-text">
+    <p class="center-line">这里是 Emoland</p>
+    <p class="center-sub">一个人静一静的地方</p>
+  </div>
+
+  <!-- 静音切换按钮（右上角） -->
+  <button id="mute-btn" class="muted" title="取消静音">
+    <svg viewBox="0 0 28 28" class="mute-svg">
+      <!-- 喇叭主体 -->
+      <path class="speaker-body"
+        d="M3 10 L9 10 L15 5 L15 23 L9 18 L3 18 Z" />
+      <!-- 声波（静音时隐藏） -->
+      <path class="speaker-wave wave1"
+        d="M18 10 C20 11.5 20 16.5 18 18" />
+      <path class="speaker-wave wave2"
+        d="M21 7 C24 10 24 18 21 21" />
+      <!-- 禁止斜线（非静音时隐藏） -->
+      <line class="speaker-x"
+        x1="7" y1="7" x2="21" y2="21" />
+    </svg>
+  </button>
+
+  <!-- 收藏按钮（右上角，喇叭右侧） -->
+  <button id="fav-btn" title="收藏场景">
+    <svg viewBox="0 0 28 28" class="heart-svg">
+      <path class="heart-path"
+        d="M14 24 C14 24 2 16 2 9.5 C2 4.5 5.5 1.5 9 1.5
+           C11.5 1.5 13.5 3.5 14 5 C14.5 3.5 16.5 1.5 19 1.5
+           C22.5 1.5 26 4.5 26 9.5 C26 16 14 24 14 24 Z" />
+    </svg>
+  </button>
+
+  <!-- 返回主界面按钮（场景模式显示） -->
+  <button id="back-btn" title="回到主界面">←</button>
+
+  <!-- 预设场景快捷按钮（仅 dialog 模式显示） -->
+  <div id="preset-bar"></div>
+
+  <!-- 底部输入栏 -->
+  <div id="input-bar">
+    <input
+      id="scene-input"
+      type="text"
+      placeholder="今天，你想去哪里"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false"
+    >
+    <button id="send-btn">→</button>
+  </div>
+
+  <!-- 主界面动态背景视频（仅 dialog 模式显示） -->
+  <video id="dialog-video" src="assets/video/dialog.mp4"
+    autoplay muted loop playsinline
+    preload="auto">
+  </video>
+
+  <!-- 加载中提示 -->
+  <div id="loading-overlay">
+    <div class="loading-text">Emoland</div>
+    <div class="loading-dots"><span>.</span><span>.</span><span>.</span></div>
+  </div>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
