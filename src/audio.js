@@ -15,6 +15,8 @@ let audioB = null;            // 用于淡入
 let currentBgm = null;        // 当前 BGM 路径
 let fadeTimer = null;         // 淡入淡出定时器
 let isUnlocked = false;       // 移动端 autoplay 是否已解锁
+let globalMuted = false;      // 全局静音状态
+const NORMAL_VOLUME = 0.8;    // 正常音量
 
 /**
  * 初始化音频模块（预创建 Audio 元素）
@@ -103,6 +105,20 @@ export function stop() {
 }
 
 /**
+ * 设置全局静音
+ */
+export function setMuted(muted) {
+  globalMuted = muted;
+  if (audioA) audioA.volume = muted ? 0 : NORMAL_VOLUME;
+  if (audioB) audioB.volume = muted ? 0 : NORMAL_VOLUME;
+}
+
+/**
+ * 查询当前静音状态
+ */
+export function isMuted() { return globalMuted; }
+
+/**
  * 解锁移动端 autoplay（需在用户首次触摸时调用）
  */
 export function unlock() {
@@ -132,22 +148,31 @@ export function unlock() {
  * 交叉淡入淡出
  */
 function crossfade(fromAudio, toAudio, onComplete) {
-  let fromVol = fromAudio.volume || 0.8;
+  // 静音状态下不做淡入淡出，直接静默切换
+  if (globalMuted) {
+    fromAudio.volume = 0;
+    fromAudio.pause();
+    toAudio.volume = 0;
+    if (onComplete) onComplete();
+    return;
+  }
+
+  let fromVol = fromAudio.volume || NORMAL_VOLUME;
   let toVol = 0;
 
   fadeTimer = setInterval(() => {
     fromVol = Math.max(0, fromVol - VOLUME_STEP);
-    toVol = Math.min(0.8, toVol + VOLUME_STEP);
+    toVol = Math.min(NORMAL_VOLUME, toVol + VOLUME_STEP);
 
     fromAudio.volume = fromVol;
     toAudio.volume = toVol;
 
-    if (fromVol <= 0 && toVol >= 0.8) {
+    if (fromVol <= 0 && toVol >= NORMAL_VOLUME) {
       clearInterval(fadeTimer);
       fadeTimer = null;
       fromAudio.pause();
       fromAudio.volume = 0;
-      toAudio.volume = 0.8;
+      toAudio.volume = NORMAL_VOLUME;
       if (onComplete) onComplete();
     }
   }, FADE_STEP);
@@ -157,12 +182,18 @@ function crossfade(fromAudio, toAudio, onComplete) {
  * 单独淡入（首次播放用）
  */
 function fadeIn(audio) {
+  // 静音状态下不淡入
+  if (globalMuted) {
+    audio.volume = 0;
+    return;
+  }
+
   let vol = 0;
   fadeTimer = setInterval(() => {
-    vol = Math.min(0.8, vol + VOLUME_STEP);
+    vol = Math.min(NORMAL_VOLUME, vol + VOLUME_STEP);
     audio.volume = vol;
 
-    if (vol >= 0.8) {
+    if (vol >= NORMAL_VOLUME) {
       clearInterval(fadeTimer);
       fadeTimer = null;
     }

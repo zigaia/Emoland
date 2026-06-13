@@ -1,8 +1,8 @@
 /* ============================================
    renderer.js — Canvas 渲染引擎
-   职责：画底图 + 粒子动画循环
-   粒子体系：sparkle / firefly / rain / snow / petal / leaf
-             sea-sparkle / meteor / mist
+   粒子体系：sparkle / firefly / glowbug / rain / snow
+             petal / leaf / dandelion / sea-sparkle
+             meteor / mist
    ============================================ */
 
 // ── 可调参数 ──────────────────────────────
@@ -173,6 +173,30 @@ function update(timestamp, dt) {
       if (p.x > canvas.width + p.radius) p.x = -p.radius;
       if (p.y < -p.radius) p.y = canvas.height + p.radius;
       if (p.y > canvas.height + p.radius) p.y = -p.radius;
+    } else if (p.type === 'glowbug') {
+      // 萤火虫：极慢浮动 + 边界回绕
+      p.x += p.vx * (dt / 16);
+      p.y += p.vy * (dt / 16);
+      p.phase = (p.phase + p.phaseSpeed * (dt / 16)) % (Math.PI * 2);
+      p.glowPhase = (p.glowPhase + p.glowSpeed * (dt / 16)) % (Math.PI * 2);
+      if (p.x < -20) p.x = canvas.width + 20;
+      if (p.x > canvas.width + 20) p.x = -20;
+      if (p.y < -20) p.y = canvas.height + 20;
+      if (p.y > canvas.height + 20) p.y = -20;
+    } else if (p.type === 'dandelion') {
+      // 蒲公英：左→右飘飞 + 正弦摇摆
+      p.x += p.vx * (dt / 16);
+      p.y += p.vy * (dt / 16);
+      p.phase = (p.phase + p.phaseSpeed * (dt / 16)) % (Math.PI * 2);
+      p.sway = Math.sin(p.phase) * p.swayAmp;
+      p.rotation += p.rotSpeed * (dt / 16);
+      // 飞过右边界 → 从左边界重新出现
+      if (p.x > canvas.width + 40) {
+        p.x = -40;
+        p.y = Math.random() * canvas.height;
+      }
+      if (p.y > canvas.height + 30) p.y = -30;
+      if (p.y < -30) p.y = canvas.height + 30;
     } else {
       // 光点 / 萤火虫：漂浮运动
       p.x += p.vx * (dt / 16);
@@ -306,7 +330,7 @@ function createParticle(cfg) {
       y: Math.random() * canvas.height - canvas.height,
       vx: speed * (-0.5 + Math.random() * 1.0),
       vy: speed * (0.3 + Math.random() * 0.5),
-      size: 2 + Math.random() * 3,                // 像素花瓣大小
+      size: 2.2 + Math.random() * 3.3,              // 花瓣大小 +10%
       phase: Math.random() * Math.PI * 2,
       phaseSpeed: 0.015 + Math.random() * 0.04,
       swayAmp: 1.5 + Math.random() * 2.5,         // 水平摇摆幅度
@@ -326,7 +350,7 @@ function createParticle(cfg) {
       y: Math.random() * canvas.height - canvas.height,
       vx: speed * (-0.8 + Math.random() * 1.6),
       vy: speed * (0.3 + Math.random() * 0.6),
-      size: 3 + Math.random() * 4,                // 落叶稍大
+      size: 3.3 + Math.random() * 4.4,              // 落叶 +10%
       phase: Math.random() * Math.PI * 2,
       phaseSpeed: 0.02 + Math.random() * 0.05,
       swayAmp: 2 + Math.random() * 3,             // 摇摆更大
@@ -377,14 +401,50 @@ function createParticle(cfg) {
     return {
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
-      vx: (Math.random() - 0.5) * 0.35,
-      vy: -(Math.random() * 0.12),
-      radius: 35 + Math.random() * 55,
+      vx: 0.2 + Math.random() * 0.5,               // 左→右定向飘移
+      vy: (Math.random() - 0.5) * 0.15,             // 轻微上下浮动
+      radius: 25 + Math.random() * 80,               // 雾团大小差异更大
       phase: Math.random() * Math.PI * 2,
-      phaseSpeed: 0.004 + Math.random() * 0.018,
+      phaseSpeed: 0.004 + Math.random() * 0.022,
       color: cfg.color,
       type: 'mist',
-      opacityBase: 0.05 + Math.random() * 0.1,
+      opacityBase: 0.03 + Math.random() * 0.22,      // 浓淡对比更强
+    };
+  }
+
+  // ── 萤火虫（固定光点，忽明忽暗） ────
+  if (cfg.type === 'glowbug') {
+    return {
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.15,            // 几乎不动
+      vy: (Math.random() - 0.5) * 0.1,
+      radius: 1 + Math.random() * 1.75,             // 缩小 50%
+      phase: Math.random() * Math.PI * 2,
+      phaseSpeed: 0.03 + Math.random() * 0.07,
+      glowPhase: Math.random() * Math.PI * 2,
+      glowSpeed: 0.02 + Math.random() * 0.05,
+      color: cfg.color,
+      type: 'glowbug',
+    };
+  }
+
+  // ── 蒲公英（白色绒羽飘飞） ──────────
+  if (cfg.type === 'dandelion') {
+    const speed = cfg.speed * (0.4 + Math.random() * 1.0);
+    return {
+      x: Math.random() * canvas.width - canvas.width * 0.3,
+      y: Math.random() * canvas.height,
+      vx: speed * (0.6 + Math.random() * 0.6),      // 左→右飘
+      vy: speed * (Math.random() - 0.5) * 0.6,       // 轻微上下
+      size: 2.5 + Math.random() * 4,
+      phase: Math.random() * Math.PI * 2,
+      phaseSpeed: 0.01 + Math.random() * 0.03,
+      swayAmp: 1 + Math.random() * 2,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.02,
+      color: cfg.color,
+      type: 'dandelion',
     };
   }
 
@@ -414,11 +474,14 @@ function createParticle(cfg) {
  */
 function drawParticle(p) {
   if (p.type === 'rain')        { drawRainParticle(p); return; }
+  if (p.type === 'snow')        { drawSnowParticle(p); return; }
   if (p.type === 'petal')       { drawPetalParticle(p); return; }
   if (p.type === 'leaf')        { drawLeafParticle(p); return; }
   if (p.type === 'sea-sparkle') { drawSeaSparkleParticle(p); return; }
   if (p.type === 'meteor')      { drawMeteorParticle(p); return; }
   if (p.type === 'mist')        { drawMistParticle(p); return; }
+  if (p.type === 'glowbug')     { drawGlowbugParticle(p); return; }
+  if (p.type === 'dandelion')   { drawDandelionParticle(p); return; }
   drawGlowParticle(p);
 }
 
@@ -439,17 +502,76 @@ function drawRainParticle(p) {
 }
 
 /**
- * 花瓣粒子：像素风小方块，飘落 + 摇摆 + 旋转
+ * 花瓣粒子：椭圆花瓣形 + 高光，飘落 + 摇摆 + 旋转
  */
 function drawPetalParticle(p) {
   ctx.save();
   ctx.translate(p.x + p.sway, p.y);
   ctx.rotate(p.rotation);
-  ctx.globalAlpha = 0.6 + 0.4 * ((Math.sin(p.phase * 1.5) + 1) / 2);
-  ctx.fillStyle = p.color;
-  // 像素风：小矩形 + 关闭抗锯齿
+  const alpha = 0.55 + 0.45 * ((Math.sin(p.phase * 1.5) + 1) / 2);
   ctx.imageSmoothingEnabled = false;
-  ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.7);
+  const s = p.size;
+
+  // 花瓣主体：纵向椭圆
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = p.color;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, s * 0.45, s * 0.65, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 中心高光：更小更亮的椭圆
+  ctx.globalAlpha = alpha * 0.55;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.ellipse(0, -s * 0.08, s * 0.2, s * 0.35, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/**
+ * 雪花粒子：六角冰晶感，带微光晕
+ */
+function drawSnowParticle(p) {
+  ctx.save();
+  const alpha = 0.5 + 0.5 * ((Math.sin(p.phase) + 1) / 2);
+  const r = p.radius;
+  const x = p.x;
+  const y = p.y;
+
+  // 外层柔光晕
+  const glowGrad = ctx.createRadialGradient(x, y, 0, x, y, r * 2.5);
+  glowGrad.addColorStop(0, p.color);
+  glowGrad.addColorStop(1, 'transparent');
+  ctx.globalAlpha = alpha * 0.35;
+  ctx.fillStyle = glowGrad;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 六角冰晶臂
+  ctx.globalAlpha = alpha * 0.7;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 0.5;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i + p.phase * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(angle) * r * 0.3, y + Math.sin(angle) * r * 0.3);
+    ctx.lineTo(x + Math.cos(angle) * r * 1.6, y + Math.sin(angle) * r * 1.6);
+    ctx.stroke();
+  }
+
+  // 冰晶核心
+  ctx.globalAlpha = alpha;
+  const coreGrad = ctx.createRadialGradient(x, y, 0, x, y, r * 0.8);
+  coreGrad.addColorStop(0, '#ffffff');
+  coreGrad.addColorStop(1, p.color);
+  ctx.fillStyle = coreGrad;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.8, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.restore();
 }
 
@@ -610,6 +732,103 @@ function drawGlowParticle(p) {
   ctx.fillStyle = core;
   ctx.beginPath();
   ctx.arc(p.x, p.y, coreRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/**
+ * 萤火虫（固定光点）：强烈脉动光晕，忽明忽暗
+ */
+function drawGlowbugParticle(p) {
+  ctx.save();
+
+  // 主脉冲：0→1→0 的强对比闪烁
+  const pulse = (Math.sin(p.phase) + 1) / 2;
+  // 光晕相位略有偏移，产生层次感
+  const glowPulse = (Math.sin(p.glowPhase) + 1) / 2;
+
+  // 外层大光晕（随脉冲呼吸）
+  const glowRadius = p.radius * 6 * (0.4 + 0.6 * glowPulse);
+  const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowRadius);
+  glow.addColorStop(0, p.color);
+  glow.addColorStop(1, 'transparent');
+  ctx.globalAlpha = pulse * 0.45;
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 中层光晕
+  const midRadius = p.radius * 2.5 * (0.5 + 0.5 * pulse);
+  const mid = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, midRadius);
+  mid.addColorStop(0, '#ffffff');
+  mid.addColorStop(0.3, p.color);
+  mid.addColorStop(1, 'transparent');
+  ctx.globalAlpha = pulse * 0.7;
+  ctx.fillStyle = mid;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, midRadius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 核心亮点（亮时很强，暗时几乎消失）
+  ctx.globalAlpha = pulse > 0.3 ? pulse : 0;
+  const core = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius * 0.8);
+  core.addColorStop(0, '#ffffff');
+  core.addColorStop(1, p.color);
+  ctx.fillStyle = core;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.radius * 0.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/**
+ * 蒲公英种子：白色绒球，轻飘飞过
+ */
+function drawDandelionParticle(p) {
+  ctx.save();
+  ctx.translate(p.x + p.sway, p.y);
+  ctx.rotate(p.rotation);
+
+  const alpha = 0.5 + 0.5 * ((Math.sin(p.phase * 0.8) + 1) / 2);
+  const s = p.size;
+
+  // 绒毛：放射状细线 + 末端分叉
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 0.4;
+  ctx.lineCap = 'round';
+  const filamentCount = 8;
+  for (let i = 0; i < filamentCount; i++) {
+    const angle = (Math.PI * 2 / filamentCount) * i + p.rotation * 0.3;
+    const len = s * (0.6 + 0.4 * ((i % 3) / 3));
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(angle) * len, Math.sin(angle) * len);
+    ctx.stroke();
+    // 绒毛末端小分叉
+    const tipX = Math.cos(angle) * len;
+    const tipY = Math.sin(angle) * len;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(tipX + Math.cos(angle + 0.4) * s * 0.25, tipY + Math.sin(angle + 0.4) * s * 0.25);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(tipX + Math.cos(angle - 0.4) * s * 0.25, tipY + Math.sin(angle - 0.4) * s * 0.25);
+    ctx.stroke();
+  }
+
+  // 核心绒点
+  ctx.globalAlpha = alpha * 0.8;
+  const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, s * 0.5);
+  coreGrad.addColorStop(0, '#ffffff');
+  coreGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = coreGrad;
+  ctx.beginPath();
+  ctx.arc(0, 0, s * 0.5, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();

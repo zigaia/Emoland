@@ -3,9 +3,9 @@
    职责：初始化 + 串联模块 + 监听用户输入
    ============================================ */
 
-import { getPresetScenes, DIALOG_SCENE, getAllScenes, getRankedScenes } from './scene.js';
+import { getPresetScenes, DIALOG_SCENE, getAllScenes, getDiverseRanking } from './scene.js';
 import { init as initRenderer, setScene, resize } from './renderer.js';
-import { init as initAudio, play, stop as stopAudio, unlock as unlockAudio } from './audio.js';
+import { init as initAudio, play, stop as stopAudio, unlock as unlockAudio, setMuted, isMuted } from './audio.js';
 
 // ── DOM 元素 ──────────────────────────────
 const canvas        = document.getElementById('emoland-canvas');
@@ -19,15 +19,15 @@ const muteBtn       = document.getElementById('mute-btn');
 const favBtn        = document.getElementById('fav-btn');
 const loadingOverlay = document.getElementById('loading-overlay');
 
-// 当前所在场景（收藏时需要知道收藏的是哪个场景）
+// 当前所在场景
 let currentSceneId = null;
 
 // 滑动切换场景
-let sceneHistory = [];      // 场景 ID 历史栈（右滑返回）
-let rankedScenes = [];      // 当前输入匹配到的场景排行
-let rankedIndex = 0;        // 当前在 rankedScenes 中的位置
+let sceneHistory = [];       // 场景 ID 历史栈（右/下滑返回）
+let diverseDeck = [];        // 多样性排序后的完整场景列表（可无限左滑）
+let deckIndex = 0;           // 当前在 diverseDeck 中的位置
 
-// 收藏列表（从 localStorage 读写）
+// 收藏
 const FAV_KEY = 'emoland_favs';
 function loadFavs()   { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch { return []; } }
 function saveFavs(ids) { localStorage.setItem(FAV_KEY, JSON.stringify(ids)); }
@@ -37,6 +37,8 @@ function saveFavs(ids) { localStorage.setItem(FAV_KEY, JSON.stringify(ids)); }
 document.addEventListener('DOMContentLoaded', () => {
   initRenderer(canvas);
   initAudio();
+  // 初始静音状态同步（对话框视频默认 muted，音频也跟随）
+  setMuted(true);
   buildPresetBar();
   goDialog();
   bindEvents();
@@ -49,12 +51,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }, 600);
 
   const sceneNames = getAllScenes().map(s => s.emoji + s.name);
-  console.log('🏝️ Emoland v0.2 — ' + sceneNames.length + ' 个场景已就绪');
+  console.log('🏝️ Emoland v0.3 — ' + sceneNames.length + ' 个场景已就绪');
   console.log('预设：', getPresetScenes().map(s => s.preset).join(' / '));
   console.log('全部：', sceneNames.join(' | '));
 });
 
-// ── 预设按钮构建 ──────────────────────────
+// ── 预设按钮 ──────────────────────────────
 
 function buildPresetBar() {
   const presets = getPresetScenes();
@@ -63,8 +65,8 @@ function buildPresetBar() {
     btn.className = 'preset-btn';
     btn.textContent = scene.preset;
     btn.addEventListener('click', () => {
-      rankedScenes = [];
-      rankedIndex = 0;
+      diverseDeck = [];
+      deckIndex = 0;
       enterScene(scene);
     });
     presetBar.appendChild(btn);
@@ -100,17 +102,17 @@ function bindEvents() {
     e.preventDefault();
   }, { passive: false });
 
-  // 滑动切换场景（左滑下一匹配 / 右滑上一场景）
+  // 滑动切换场景
   bindSwipe();
 }
 
-// ── 主界面 ⇄ 场景 切换 ──────────────────────
+// ── 主界面 ⇄ 场景 ──────────────────────────
 
 function goDialog() {
   currentSceneId = null;
   sceneHistory = [];
-  rankedScenes = [];
-  rankedIndex = 0;
+  diverseDeck = [];
+  deckIndex = 0;
   setScene(DIALOG_SCENE);
   stopAudio();
   dialogVideo.classList.remove('hidden');
@@ -122,12 +124,6 @@ function goDialog() {
   input.placeholder = '今天，你想去哪里';
 }
 
-/**
- * 进入场景
- * @param {Object} scene
- * @param {Object} [opts]
- * @param {boolean} [opts.skipHistory] - true 时不推入历史栈（右滑返回时使用）
- */
 function enterScene(scene, { skipHistory = false } = {}) {
   currentSceneId = scene.id;
   setScene(scene);
@@ -147,29 +143,29 @@ function enterScene(scene, { skipHistory = false } = {}) {
   }
 }
 
-// ── 核心逻辑 ──────────────────────────────
+// ── 核心：用户输入 → 多样性匹配 ────────────
 
 function handleSend() {
   const text = input.value;
   if (!text.trim()) return;
 
-  // 获取按匹配分数排序的场景列表
-  rankedScenes = getRankedScenes(text);
+  // 多样性排序（同系列靠后）+ 补全全部场景 → 完整列表
+  diverseDeck = getDiverseRanking(text, currentSceneId);
 
-  if (!rankedScenes.length) {
+  if (!diverseDeck.length) {
     input.value = '';
     input.blur();
     return;
   }
 
-  // 如果排名第一的场景就是当前场景，自动跳到下一个（避免用户以为指令失灵）
+  // 跳过当前场景（如果排名第一就是当前场景）
   let pickIndex = 0;
-  if (rankedScenes[0].id === currentSceneId && rankedScenes.length > 1) {
+  if (diverseDeck[0].id === currentSceneId && diverseDeck.length > 1) {
     pickIndex = 1;
   }
 
-  rankedIndex = pickIndex;
-  const scene = rankedScenes[pickIndex];
+  deckIndex = pickIndex;
+  const scene = diverseDeck[pickIndex];
   if (scene && scene.id !== 'dialog') {
     enterScene(scene);
   }
@@ -178,7 +174,7 @@ function handleSend() {
   input.blur();
 }
 
-// ── 滑动切换场景 ──────────────────────────
+// ── 四向滑动 ──────────────────────────────
 
 function bindSwipe() {
   let touchStartX = 0;
@@ -201,65 +197,78 @@ function bindSwipe() {
     const dy = t.clientY - touchStartY;
     const dt = Date.now() - touchStartTime;
 
-    // 阈值：水平位移 ≥ 60px，水平方向主导（≥1.5倍垂直），时长 < 500ms
-    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5 || dt > 500) return;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
 
-    if (dx < 0) {
-      swipeLeft();
+    // 阈值：位移 ≥ 60px，时长 < 600ms
+    if (Math.max(absDx, absDy) < 60 || dt > 600) return;
+
+    // 判断主导方向（水平 vs 垂直）
+    if (absDx >= absDy) {
+      // 水平主导 →
+      if (dx < 0) swipeNext();   // 左滑 = 下一个
+      else        swipeBack();   // 右滑 = 上一个
     } else {
-      swipeRight();
+      // 垂直主导 ↓
+      if (dy < 0) swipeNext();   // 上滑 = 下一个
+      else        swipeBack();   // 下滑 = 上一个
     }
   });
 }
 
 /**
- * 左滑 → 切换到下一个匹配场景
+ * 左滑 / 上滑 → 下一个场景（可无限循环）
  */
-function swipeLeft() {
-  if (!currentSceneId || rankedIndex + 1 >= rankedScenes.length) return;
+function swipeNext() {
+  if (!currentSceneId || !diverseDeck.length) return;
 
-  rankedIndex++;
-  const nextScene = rankedScenes[rankedIndex];
+  // 循环：到头后回到第一个
+  deckIndex = (deckIndex + 1) % diverseDeck.length;
+  const nextScene = diverseDeck[deckIndex];
   enterScene(nextScene);
 }
 
 /**
- * 右滑 → 返回上一个场景 / 回到主界面
+ * 右滑 / 下滑 → 返回上一个场景 / 回到主界面
  */
-function swipeRight() {
+function swipeBack() {
   if (!currentSceneId) return;
 
   if (sceneHistory.length > 1) {
-    // 弹出当前场景，回到上一个
     sceneHistory.pop();
     const prevId = sceneHistory[sceneHistory.length - 1];
     const prevScene = getAllScenes().find(s => s.id === prevId);
     if (prevScene) {
+      // 同步 deckIndex
+      const pos = diverseDeck.findIndex(s => s.id === prevId);
+      if (pos !== -1) deckIndex = pos;
       enterScene(prevScene, { skipHistory: true });
     }
   } else if (sceneHistory.length === 1) {
-    // 已是最初场景，回到主界面
     goDialog();
   }
 }
 
 // ── 辅助功能 ──────────────────────────────
 
-function unlockOnce() {
-  unlockAudio();
-}
+function unlockOnce() { unlockAudio(); }
 
 function toggleMute() {
-  const isMuted = dialogVideo.muted;
-  dialogVideo.muted = !isMuted;
-  if (isMuted) {
-    muteBtn.classList.remove('muted');
-  } else {
+  // 全局静音切换：同时控制对话视频 + 场景 BGM
+  const wasMuted = dialogVideo.muted && isMuted();
+  const nowMuted = !wasMuted;
+
+  dialogVideo.muted = nowMuted;
+  setMuted(nowMuted);
+
+  if (nowMuted) {
     muteBtn.classList.add('muted');
+  } else {
+    muteBtn.classList.remove('muted');
   }
 }
 
-// ── 收藏逻辑 ──────────────────────────────
+// ── 收藏 ──────────────────────────────────
 
 function updateFavUI() {
   const favs = loadFavs();
@@ -278,12 +287,10 @@ function toggleFav() {
   const idx = favs.indexOf(currentSceneId);
   const isFav = idx !== -1;
 
-  // 触发弹跳动效
   favBtn.classList.remove('popping');
-  void favBtn.offsetWidth;               // 强制回流，重置动画
+  void favBtn.offsetWidth;
   favBtn.classList.add('popping');
 
-  // 收藏时触发扩散光晕
   if (!isFav) {
     favBtn.classList.remove('ringing');
     void favBtn.offsetWidth;
@@ -291,19 +298,17 @@ function toggleFav() {
   }
 
   if (isFav) {
-    // 取消收藏
     favs.splice(idx, 1);
     saveFavs(favs);
     favBtn.classList.remove('favorited');
   } else {
-    // 收藏
     favs.push(currentSceneId);
     saveFavs(favs);
     favBtn.classList.add('favorited');
   }
 }
 
-// ── 辅助功能 ──────────────────────────────
+// ── Toast ─────────────────────────────────
 
 function showToast(text) {
   let toast = document.getElementById('scene-toast');
