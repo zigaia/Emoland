@@ -37,6 +37,25 @@ export function init(canvasEl) {
 }
 
 /**
+ * 预加载所有场景底图（浏览器缓存后切换瞬间完成）
+ * @param {Array} scenes - getAllScenes() 返回的场景列表
+ */
+export function preload(scenes) {
+  let loaded = 0;
+  for (const scene of scenes) {
+    if (!scene.background) continue;
+    const img = new Image();
+    img.src = scene.background;
+    img.onload = img.onerror = () => {
+      loaded++;
+      if (loaded === scenes.filter(s => s.background).length) {
+        console.log('🖼️ ' + loaded + ' 张底图预加载完成');
+      }
+    };
+  }
+}
+
+/**
  * 窗口大小变化时调用，重新适配 Canvas 尺寸
  */
 export function resize() {

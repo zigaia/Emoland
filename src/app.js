@@ -4,7 +4,7 @@
    ============================================ */
 
 import { getPresetScenes, DIALOG_SCENE, getAllScenes, getDiverseRanking } from './scene.js';
-import { init as initRenderer, setScene, resize } from './renderer.js';
+import { init as initRenderer, setScene, resize, preload } from './renderer.js';
 import { init as initAudio, play, stop as stopAudio, unlock as unlockAudio, setMuted, isMuted } from './audio.js';
 
 // ── DOM 元素 ──────────────────────────────
@@ -39,6 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initAudio();
   // 初始静音状态同步（对话框视频默认 muted，音频也跟随）
   setMuted(true);
+  // 预加载所有场景底图（后续切换瞬间完成）
+  preload(getAllScenes());
   buildPresetBar();
   goDialog();
   bindEvents();
@@ -65,7 +67,15 @@ function buildPresetBar() {
     btn.className = 'preset-btn';
     btn.textContent = scene.preset;
     btn.addEventListener('click', () => {
-      diverseDeck = [];
+      // 全部场景填入滑动画板，预设场景排在第一位
+      const all = getAllScenes();
+      const idx = all.findIndex(s => s.id === scene.id);
+      if (idx > 0) {
+        // 当前场景放首位，其余保持原顺序
+        diverseDeck = [all[idx], ...all.slice(0, idx), ...all.slice(idx + 1)];
+      } else {
+        diverseDeck = all;
+      }
       deckIndex = 0;
       enterScene(scene);
     });
