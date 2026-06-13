@@ -38,8 +38,7 @@ html, body {
   z-index: 0;                   /* 垫在最底层 */
   opacity: 1;
   transition: opacity 0.5s;
-  /* 放大 8% 将左上角水印推出可视区（约裁 4% 边距） */
-  transform: scale(1.08);
+  transform: scale(1.15);
 }
 
 #dialog-video.hidden {
